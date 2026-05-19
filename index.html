@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>社内マニュアル検索システム</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif;
+            background: #f0f4f8;
+            color: #1a202c;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, #1a56db, #1e429f);
+            color: white;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            flex-shrink: 0;
+        }
+        header .logo { font-size: 28px; }
+        header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.02em; }
+        header .subtitle { font-size: 11px; opacity: 0.75; margin-top: 2px; }
+
+        /* Layout */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            flex-shrink: 0;
+            background: white;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 16px 18px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #64748b;
+        }
+
+        .sidebar-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        /* Upload area */
+        .upload-area {
+            border: 2px dashed #cbd5e1;
+            border-radius: 10px;
+            padding: 28px 14px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #f8fafc;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #1a56db;
+            background: #eff6ff;
+        }
+        .upload-area .icon { font-size: 32px; display: block; margin-bottom: 10px; }
+        .upload-area p { font-size: 13px; color: #64748b; line-height: 1.5; }
+        .upload-area p strong { color: #1a56db; }
+        #file-input { display: none; }
+
+        /* Progress */
+        .progress-wrap {
+            display: none;
+            background: #e2e8f0;
+            border-radius: 999px;
+            height: 5px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #1a56db, #60a5fa);
+            border-radius: 999px;
+            width: 0%;
+            transition: width 0.2s;
+        }
+
+        /* PDF items */
+        .pdf-item {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 12px;
+        }
+        .pdf-item .name {
+            font-weight: 600;
+            color: #166534;
+            word-break: break-all;
+            margin-bottom: 4px;
+            display: flex;
+            gap: 6px;
+            align-items: flex-start;
+        }
+        .pdf-item .meta { color: #15803d; }
+
+        /* Chat panel */
+        .chat-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: #f8fafc;
+        }
+
+        .messages-wrap {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Welcome screen */
+        .welcome {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #94a3b8;
+            padding: 40px;
+        }
+        .welcome .icon { font-size: 56px; margin-bottom: 16px; }
+        .welcome h2 { font-size: 20px; font-weight: 600; color: #64748b; margin-bottom: 8px; }
+        .welcome p { font-size: 14px; line-height: 1.7; }
+
+        /* Messages */
+        .msg {
+            display: flex;
+            gap: 10px;
+            max-width: 780px;
+            animation: fadeIn 0.25s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+        .msg.user {
+            flex-direction: row-reverse;
+            margin-left: auto;
+        }
+        .msg.assistant { margin-right: auto; }
+
+        .avatar {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .msg.user .avatar { background: #1a56db; }
+        .msg.assistant .avatar { background: #e2e8f0; }
+
+        .msg-body { display: flex; flex-direction: column; gap: 8px; }
+
+        .bubble {
+            padding: 12px 16px;
+            border-radius: 14px;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+        .msg.user .bubble {
+            background: #1a56db;
+            color: white;
+            border-top-right-radius: 4px;
+        }
+        .msg.assistant .bubble {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-top-left-radius: 4px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .bubble p { margin-bottom: 8px; }
+        .bubble p:last-child { margin-bottom: 0; }
+
+        /* Citation highlight */
+        .ref-tag {
+            display: inline-block;
+            background: #dbeafe;
+            color: #1d4ed8;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 4px;
+            border: 1px solid #bfdbfe;
+            cursor: default;
+        }
+
+        /* Citations panel */
+        .citations-panel {
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 12px;
+        }
+        .citations-panel .panel-title {
+            font-weight: 700;
+            color: #92400e;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        .citation-card {
+            background: white;
+            border: 1px solid #fde68a;
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+        }
+        .citation-card:last-child { margin-bottom: 0; }
+        .citation-card .clabel {
+            font-weight: 700;
+            color: #b45309;
+            margin-bottom: 4px;
+            font-size: 11px;
+        }
+        .citation-card .ctext {
+            color: #78350f;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        /* Error */
+        .error-bubble {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        /* Loading dots */
+        .loading-dots {
+            display: inline-flex;
+            gap: 5px;
+            align-items: center;
+        }
+        .loading-dots span {
+            width: 7px; height: 7px;
+            background: #94a3b8;
+            border-radius: 50%;
+            animation: dot-bounce 1.3s infinite ease-in-out;
+        }
+        .loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+        .loading-dots span:nth-child(3) { animation-delay: 0.30s; }
+        @keyframes dot-bounce {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Input area */
+        .input-area {
+            padding: 14px 20px;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            flex-shrink: 0;
+        }
+        #question-input {
+            flex: 1;
+            padding: 11px 16px;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+            transition: border-color 0.2s;
+            min-height: 46px;
+            max-height: 120px;
+            line-height: 1.5;
+        }
+        #question-input:focus { border-color: #1a56db; }
+        #question-input::placeholder { color: #94a3b8; }
+
+        #send-btn {
+            background: #1a56db;
+            color: white;
+            border: none;
+            padding: 11px 22px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: inherit;
+            font-weight: 700;
+            height: 46px;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+        #send-btn:hover:not(:disabled) { background: #1e429f; }
+        #send-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+        .hint {
+            font-size: 11px;
+            color: #94a3b8;
+            padding: 0 4px 8px;
+        }
+
+        .section-label-sm {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: #64748b;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <span class="logo">📚</span>
+    <div>
+        <h1>社内マニュアル検索システム</h1>
+        <div class="subtitle">Powered by Claude AI (Anthropic)</div>
+    </div>
+</header>
+
+<div class="main-container">
+
+    <!-- Sidebar: PDF Upload -->
+    <div class="sidebar">
+        <div class="sidebar-header">マニュアル管理</div>
+        <div class="sidebar-body">
+
+            <!-- API Key input -->
+            <div id="apikey-section">
+                <div class="section-label-sm">Anthropic APIキー</div>
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                    <input id="apikey-input" type="password"
+                        placeholder="sk-ant-api03-..."
+                        style="flex:1;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:12px;font-family:monospace;outline:none;"
+                    >
+                    <button id="apikey-save" style="background:#1a56db;color:white;border:none;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;white-space:nowrap;">保存</button>
+                </div>
+                <div id="apikey-status" style="font-size:11px;margin-top:5px;color:#64748b;"></div>
+            </div>
+
+            <div class="upload-area" id="upload-area">
+                <span class="icon">📄</span>
+                <p><strong>クリック</strong>またはドラッグ&ドロップ<br>PDFファイルをアップロード</p>
+            </div>
+            <input type="file" id="file-input" accept=".pdf" multiple>
+
+            <div class="progress-wrap" id="progress-wrap">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+
+            <div id="pdf-list"></div>
+
+        </div>
+    </div>
+
+    <!-- Chat Panel -->
+    <div class="chat-panel">
+        <div class="messages-wrap" id="messages-wrap">
+            <div class="welcome" id="welcome">
+                <div class="icon">🔍</div>
+                <h2>マニュアルを検索する</h2>
+                <p>左側でPDFファイルをアップロードしてから<br>質問を入力してください。<br><br>AIがマニュアルの内容を基に回答し、<br>参照箇所を表示します。</p>
+            </div>
+        </div>
+
+        <div style="padding: 0 20px;">
+            <div class="hint">Enterで送信 / Shift+Enterで改行</div>
+        </div>
+
+        <div class="input-area">
+            <textarea id="question-input" placeholder="マニュアルについて質問してください..." rows="1"></textarea>
+            <button id="send-btn" disabled>送信 ▶</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // API key is entered by the user at runtime and stored in localStorage only.
+    // It is never sent anywhere except directly to api.anthropic.com.
+    function getApiKey() { return localStorage.getItem('manual_search_api_key') || ''; }
+    const MODEL = 'claude-sonnet-4-6';
+    const MAX_CHARS_CONTEXT = 90000; // ~70k tokens safety margin
+
+    // PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    // State
+    let chunks = [];   // { index, page, filename, text }
+    let busy = false;
+
+    // DOM
+    const apikeyInput  = document.getElementById('apikey-input');
+    const apikeySave   = document.getElementById('apikey-save');
+    const apikeyStatus = document.getElementById('apikey-status');
+    const uploadArea    = document.getElementById('upload-area');
+    const fileInput     = document.getElementById('file-input');
+    const pdfList       = document.getElementById('pdf-list');
+    const messagesWrap  = document.getElementById('messages-wrap');
+    const questionInput = document.getElementById('question-input');
+    const sendBtn       = document.getElementById('send-btn');
+    const progressWrap  = document.getElementById('progress-wrap');
+    const progressFill  = document.getElementById('progress-fill');
+
+    /* ── API Key setup ─────────────────────────────────────────── */
+
+    function initApiKeyUI() {
+        const saved = getApiKey();
+        if (saved) {
+            apikeyInput.value = saved;
+            apikeyStatus.textContent = '✅ APIキーが設定されています';
+            apikeyStatus.style.color = '#15803d';
+        }
+    }
+
+    apikeySave.addEventListener('click', () => {
+        const val = apikeyInput.value.trim();
+        if (!val.startsWith('sk-ant-')) {
+            apikeyStatus.textContent = '⚠️ 正しいAnthropicのAPIキーを入力してください';
+            apikeyStatus.style.color = '#b91c1c';
+            return;
+        }
+        localStorage.setItem('manual_search_api_key', val);
+        apikeyStatus.textContent = '✅ 保存しました';
+        apikeyStatus.style.color = '#15803d';
+        updateSendBtn();
+    });
+
+    initApiKeyUI();
+
+    /* ── Upload / Drag-drop ───────────────────────────────────── */
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+
+    uploadArea.addEventListener('dragover', e => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+    uploadArea.addEventListener('drop', e => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        handleFiles([...e.dataTransfer.files].filter(f => f.type === 'application/pdf'));
+    });
+
+    fileInput.addEventListener('change', () => {
+        handleFiles([...fileInput.files]);
+        fileInput.value = '';
+    });
+
+    async function handleFiles(files) {
+        if (!files.length) return;
+        progressWrap.style.display = 'block';
+        for (const file of files) {
+            await parsePDF(file);
+        }
+        progressWrap.style.display = 'none';
+        progressFill.style.width = '0%';
+        rebuildChunkIndex();
+        updateSendBtn();
+    }
+
+    async function parsePDF(file) {
+        const buf  = await file.arrayBuffer();
+        const pdf  = await pdfjsLib.getDocument({ data: buf }).promise;
+        const total = pdf.numPages;
+
+        // Remove existing entries for same file
+        chunks = chunks.filter(c => c.filename !== file.name);
+
+        for (let p = 1; p <= total; p++) {
+            const page    = await pdf.getPage(p);
+            const content = await page.getTextContent();
+            const text    = content.items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim();
+
+            if (text.length > 20) {
+                chunks.push({ page: p, filename: file.name, text });
+            }
+
+            progressFill.style.width = (p / total * 100) + '%';
+        }
+
+        renderPDFItem(file.name, total);
+    }
+
+    function rebuildChunkIndex() {
+        chunks.forEach((c, i) => c.index = i + 1);
+    }
+
+    function renderPDFItem(name, pages) {
+        let item = pdfList.querySelector(`[data-fn="${CSS.escape(name)}"]`);
+        if (!item) {
+            item = document.createElement('div');
+            item.className = 'pdf-item';
+            item.dataset.fn = name;
+            pdfList.appendChild(item);
+        }
+        item.innerHTML = `
+            <div class="name"><span>📄</span><span>${esc(name)}</span></div>
+            <div class="meta">✅ ${pages} ページ読み込み完了</div>
+        `;
+    }
+
+    function updateSendBtn() {
+        sendBtn.disabled = (chunks.length === 0 || busy || !getApiKey());
+    }
+
+    /* ── Textarea auto-resize & submit ────────────────────────── */
+
+    questionInput.addEventListener('input', () => {
+        questionInput.style.height = 'auto';
+        questionInput.style.height = Math.min(questionInput.scrollHeight, 120) + 'px';
+    });
+
+    questionInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (!sendBtn.disabled) sendMessage();
+        }
+    });
+
+    sendBtn.addEventListener('click', sendMessage);
+
+    /* ── Message rendering ─────────────────────────────────────── */
+
+    function removeWelcome() {
+        document.getElementById('welcome')?.remove();
+    }
+
+    function addMessage(role, html, citedChunks) {
+        removeWelcome();
+        const wrap = document.createElement('div');
+        wrap.className = `msg ${role}`;
+
+        const avatarChar = role === 'user' ? '👤' : '🤖';
+        const bubbleHtml = `<div class="bubble">${html}</div>`;
+        const citHtml    = citedChunks?.length ? buildCitationsHtml(citedChunks) : '';
+
+        wrap.innerHTML = `
+            <div class="avatar">${avatarChar}</div>
+            <div class="msg-body">
+                ${bubbleHtml}
+                ${citHtml}
+            </div>
+        `;
+
+        messagesWrap.appendChild(wrap);
+        messagesWrap.scrollTop = messagesWrap.scrollHeight;
+        return wrap;
+    }
+
+    function buildCitationsHtml(cited) {
+        const cards = cited.map(c => `
+            <div class="citation-card">
+                <div class="clabel">📄 ${esc(c.filename)} &nbsp;—&nbsp; ${c.page} ページ &nbsp;(セクション ${c.index})</div>
+                <div class="ctext">${esc(c.text.slice(0, 220))}${c.text.length > 220 ? '…' : ''}</div>
+            </div>
+        `).join('');
+        return `
+            <div class="citations-panel">
+                <div class="panel-title">📎 参照箇所 (${cited.length} セクション)</div>
+                ${cards}
+            </div>
+        `;
+    }
+
+    function showLoadingMsg() {
+        removeWelcome();
+        const el = document.createElement('div');
+        el.className = 'msg assistant';
+        el.id = 'loading-indicator';
+        el.innerHTML = `
+            <div class="avatar">🤖</div>
+            <div class="msg-body">
+                <div class="bubble">
+                    <div class="loading-dots"><span></span><span></span><span></span></div>
+                </div>
+            </div>
+        `;
+        messagesWrap.appendChild(el);
+        messagesWrap.scrollTop = messagesWrap.scrollHeight;
+    }
+
+    function removeLoadingMsg() {
+        document.getElementById('loading-indicator')?.remove();
+    }
+
+    function showError(msg) {
+        const el = document.createElement('div');
+        el.className = 'error-bubble';
+        el.textContent = `⚠️ ${msg}`;
+        messagesWrap.appendChild(el);
+        messagesWrap.scrollTop = messagesWrap.scrollHeight;
+    }
+
+    /* ── Build context & call API ──────────────────────────────── */
+
+    function buildContextString() {
+        let totalLen = 0;
+        const selected = [];
+        for (const c of chunks) {
+            if (totalLen + c.text.length > MAX_CHARS_CONTEXT) break;
+            selected.push(c);
+            totalLen += c.text.length;
+        }
+        return {
+            contextStr: selected
+                .map(c => `[セクション${c.index} | ${c.filename} | ${c.page}ページ]\n${c.text}`)
+                .join('\n\n---\n\n'),
+            count: selected.length,
+        };
+    }
+
+    function parseCitedChunks(answerText) {
+        const re = /\[セクション(\d+)\]/g;
+        const nums = new Set();
+        let m;
+        while ((m = re.exec(answerText)) !== null) nums.add(parseInt(m[1]));
+        return chunks.filter(c => nums.has(c.index));
+    }
+
+    function formatAnswer(rawText) {
+        // Escape HTML, then re-apply styling
+        let html = esc(rawText);
+        // Highlight [セクションN] tags
+        html = html.replace(/\[セクション(\d+)\]/g,
+            '<span class="ref-tag">[セクション$1]</span>');
+        // Convert markdown-ish bold **text**
+        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        // Paragraphs
+        html = html.split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+        return html;
+    }
+
+    async function sendMessage() {
+        const question = questionInput.value.trim();
+        if (!question || busy) return;
+
+        busy = true;
+        updateSendBtn();
+        questionInput.value = '';
+        questionInput.style.height = 'auto';
+
+        addMessage('user', `<p>${esc(question)}</p>`, null);
+        showLoadingMsg();
+
+        try {
+            if (!getApiKey()) {
+                throw new Error('APIキーが設定されていません。左側のパネルでAnthropicのAPIキーを入力してください。');
+            }
+            const { contextStr, count } = buildContextString();
+
+            const systemPrompt =
+`あなたは社内マニュアルの専門アシスタントです。
+提供されたマニュアルのセクション情報を基に、ユーザーの質問に日本語で正確に回答してください。
+
+【回答ルール】
+- マニュアルに記載されている情報のみを使用すること
+- 参照したセクションを必ず [セクションN] の形式で回答内に明示すること（例:「[セクション3]によると…」）
+- マニュアルに記載がない場合は「マニュアルには該当する記載がありません」と明示すること
+- 箇条書きや段落を適切に使い、読みやすくまとめること
+- 必ず日本語で回答すること`;
+
+            const userMsg =
+`以下は社内マニュアルの内容です（全 ${count} セクション）:
+
+${contextStr}
+
+---
+
+質問: ${question}`;
+
+            const res = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    'x-api-key': getApiKey(),
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true',
+                },
+                body: JSON.stringify({
+                    model: MODEL,
+                    max_tokens: 2048,
+                    system: systemPrompt,
+                    messages: [{ role: 'user', content: userMsg }],
+                }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `HTTP ${res.status}`);
+            }
+
+            const data = await res.json();
+            const answer = data.content[0].text;
+            const cited  = parseCitedChunks(answer);
+
+            removeLoadingMsg();
+            addMessage('assistant', formatAnswer(answer), cited);
+
+        } catch (err) {
+            removeLoadingMsg();
+            showError(`エラーが発生しました: ${err.message}`);
+        } finally {
+            busy = false;
+            updateSendBtn();
+        }
+    }
+
+    /* ── Utilities ─────────────────────────────────────────────── */
+
+    function esc(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+</script>
+</body>
+</html>
